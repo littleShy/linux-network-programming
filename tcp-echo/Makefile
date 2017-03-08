@@ -14,4 +14,4 @@ server.o: server.cpp config.h
 	g++ -c server.cpp
 
 clean:
-	rm client server *.o
+	rm -rf client server *.o
