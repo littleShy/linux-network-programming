@@ -1,5 +1,7 @@
 # linux-network-programming
 
+[TOC]
+
 ---
 
 ####Function `socket`
@@ -216,6 +218,72 @@ FD_SET(5, &rset);        /* turn on bit for fd 5 */
 >* A socket has an exception condition pending if there is out-of-band data for the socket or the socket is still at the out-of-band mark. (We will describe out-of-band data in Chapter 24.)
 
  >- Our definitions of "readable" and "writable" are taken directly from the kernel's soreadable and sowriteable macros on pp. 530–531 of TCPv2. Similarly, our definition of the "exception condition" for a socket is from the soo_select function on these same pages.
+
+---
+
+####Function `poll`
+```c++
+#include <poll.h>
+ 
+int poll (struct pollfd *fdarray, unsigned long nfds, int timeout);
+//Returns: count of ready descriptors, 0 on timeout, –1 on error
+```
+#####Struct `pollfd`
+>The first argument is a pointer to the first element of an array of structures. Each element of the array is a pollfd structure that specifies the conditions to be tested for a given descriptor, fd.
+
+```c++
+struct pollfd {
+  int     fd;       /* descriptor to check */
+  short   events;   /* events of interest on fd */
+  short   revents;  /* events that occurred on fd */
+};
+```
+
+>The conditions to be tested are specified by the events member, and the function returns the status for that descriptor in the corresponding revents member. (Having two variables per descriptor, one a value and one a result, avoids value-result arguments. Recall that the middle three arguments for select are value-result.) Each of these two members is composed of one or more bits that specify a certain condition.
+
+>If we are no longer interested in a particular descriptor, we just set the fd member of the pollfd structure to a negative value. Then the events member is ignored and the revents member is set to 0 on return.
+
+######Input `events` and returned `revents` for `poll`.
+|Constant|Input to evnets?|Result from revents?|Description|
+|--------|:--------------:|:------------------:|:---------:|
+|POLLIN<br>POLLRDNORM<br>POLLRDBAND<br>POLLPRI|\*<br>\*<br>\*<br>\*|\*<br>\*<br>\*<br>\*|Nromal or priority band data can be read<br>Normal data can be read<br>Priority data can be read<br>High-priority data can be read|
+|POLLOUT<br>POLLWRNORM<br>POLLWRBAND|\*<br>\*<br>\*|\*<br>\*<br>\*|Normal data can be writen<br>Nromal data can be writen<br>Priority band data can be writen|
+|POLLERR<br>POLLHUP<br>POLLNVAL| |\*<br>\*<br>\*|Error has occurred<br>Hungup has occurred<br>Discriptor is not an open file|
+
+>We have divided this figure into three sections: The first four constants deal with input, the next three deal with output, and the final three deal with errors. Notice that the final three cannot be set in events, but are always returned in revents when the corresponding condition exists.
+
+>With regard to TCP and UDP sockets, the following conditions cause poll to return the specified `revent`. Unfortunately, POSIX leaves many holes (i.e., optional ways to return the same condition) in its definition of poll.
+
+>* All regular TCP data and all UDP data is considered normal.
+>* TCP's out-of-band data (Chapter 24) is considered priority band.
+>* When the read half of a TCP connection is closed (e.g., a FIN is received), this is also considered normal data and a subsequent read operation will return 0.
+>* The presence of an error for a TCP connection can be considered either normal data or an error (POLLERR). In either case, a subsequent read will return –1 with errno set to the appropriate value. This handles conditions such as the receipt of an RST or a timeout.
+>* The availability of a new connection on a listening socket can be considered either normal data or priority data. Most implementations consider this normal data.
+>* The completion of a nonblocking connect is considered to make a socket writable.
+
+>The number of elements in the array of structures is specified by the `nfds` argument.
+
+#####Timeout values for `poll`
+
+|Timeout value|Description|
+|-------------|:---------:|
+|INFTIM<br>0<br>\>0|Wait forever<br>Return immediately, do not block<br>Wait specified number of milliseconds|
+
+>The constant `INFTIM` is defined to be a negative value. If the system does not provide a timer with millisecond accuracy, the value is rounded up to the nearest supported value.
+>* As with select, any timeout set for poll is limited by the implementation's clock resolution (often 10 ms).
+
+>The return value from poll is –1 if an error occurred, 0 if no descriptors are ready before the timer expires, otherwise it is the number of descriptors that have a nonzero revents member.
+
+>FD_SETSIZE and the maximum number of descriptors per descriptor set versus the maximum number of descriptors per process. We do not have that problem with poll since it is the caller's responsibility to allocate an array of pollfd structures and then tell the kernel the number of elements in the array. There is no fixed-size datatype similar to fd_set that the kernel knows about.
+
+>* The POSIX specification requires both select and poll. But, from a portability perspective today, more systems support select than poll. Also, POSIX defines pselect, an enhanced version of select that handles signal blocking and provides increased time resolution. Nothing similar is defined for poll.
+
+
+
+
+
+
+
 
 
 
