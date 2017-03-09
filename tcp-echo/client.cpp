@@ -53,7 +53,7 @@ int main(int argc, char **argv)
 	bzero(&serveraddr, sizeof(serveraddr));
 	serveraddr.sin_family = AF_INET;
 	serveraddr.sin_port = htons(PORT);
-	if(inet_pton(AF_INET, argv[1], &(serveraddr.sin_addr)) != 1)
+	if(inet_pton(AF_INET, argv[1], &(serveraddr.sin_addr)) <= 0)
 	{
 		printf("Input Ip address [%s] format is'n valid.\n", argv[1]);
 		exit(1);
