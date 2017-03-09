@@ -1,5 +1,8 @@
 # linux-network-programming
-linux network programming
+
+---
+
+####Function `socket`
 
 ```C++
 #include <sys/socket.h>
@@ -41,12 +44,19 @@ int socket(int family, int type, int protocol);
 |SOCK_SEQPACKET|SCTP    |SCTP    |YES|
 |SOCK_RAW      |IPv4    |IPv6    |        |YES     |YES|
 
+---
+
+####Function `connect`
+
 ```C++
 #include <sys/socket.h>
  
 int connect(int sockfd, const struct sockaddr *servaddr, socklen_t addrlen);
 //Returns: 0 if OK, -1 on error
 ```
+---
+
+####Function `bind`
 
 ```C++
 #include <sys/socket.h>
@@ -56,6 +66,10 @@ int bind(int sockfd, const struct sockaddr *myaddr, socklen_t addrlen);
 ```
 
 >If we specify a port number of 0, the kernel chooses an ephemeral port when bind is called. But if we specify a wildcard IP address, the kernel does not choose the local IP address until either the socket is connected (TCP) or a datagram is sent on the socket (UDP).
+
+---
+
+####Function `listen`
 
 ```c++
 #include <sys/socket.h>
@@ -67,8 +81,11 @@ int bind(int sockfd, const struct sockaddr *myaddr, socklen_t addrlen);
 >To understand the backlog argument, we must realize that for a given listening socket, the kernel maintains two queues:
 
 >- An incomplete connection queue, which contains an entry for each SYN that has arrived from a client for which the server is awaiting completion of the TCP three-way handshake. These sockets are in the SYN_RCVD state.
-
 >- A completed connection queue, which contains an entry for each client with whom the TCP three-way handshake has completed. These sockets are in the ESTABLISHED state.
+
+---
+
+####Function `accept`
 
 ```c++
 #include <sys/socket.h>
@@ -77,6 +94,10 @@ int accept (int sockfd, struct sockaddr *cliaddr, socklen_t *addrlen);
 //Returns: non-negative descriptor if OK, -1 on error
 ```
 >This function returns up to three values: an integer return code that is either a new socket descriptor or an error indication, the protocol address of the client process (through the cliaddr pointer), and the size of this address (through the addrlen pointer). If we are not interested in having the protocol address of the client returned, we set both cliaddr and addrlen to null pointers.
+
+---
+
+####Function `close`
 
 ```c++
 #include <unistd.h>
@@ -91,6 +112,9 @@ int close (int sockfd);
 
 >We must also be aware of what happens in our concurrent server if the parent does not call close for each connected socket returned by accept. First, the parent will eventually run out of descriptors, as there is usually a limit to the number of descriptors that any process can have open at any time. But more importantly, none of the client connections will be terminated. When the child closes the connected socket, its reference count will go from 2 to 1 and it will remain at 1 since the parent never closes the connected socket. This will prevent TCP's connection termination sequence from occurring, and the connection will remain open.
 
+---
+
+####Function `getsockname`/`getpeername`
 ```c++
 #include <sys/socket.h>
  
@@ -101,5 +125,98 @@ int getpeername(int sockfd, struct sockaddr *peeraddr, socklen_t *addrlen);
 ```
 >These two functions return either the local protocol address associated with a socket (`getsockname`) or the foreign protocol address associated with a socket (`getpeername`).
 
+---
 
->
+####Function `select`
+
+```c++
+#include <sys/select.h>
+ 
+#include <sys/time.h>
+ 
+int select(int maxfdp1, fd_set *readset, fd_set *writeset, fd_set *exceptset, const struct timeval *timeout);
+//Returns: positive count of ready descriptors, 0 on timeout, –1 on error
+```
+
+>We start our description of this function with its final argument, which tells the kernel how long to wait for one of the specified descriptors to become ready. A timeval structure specifies the number of seconds and microseconds.
+
+#####Struct `timeval`
+```c++
+struct timeval  {
+  long   tv_sec;          /* seconds */
+  long   tv_usec;         /* microseconds */
+};
+```
+
+>There are three possibilities:
+
+>- Wait forever— Return only when one of the specified descriptors is ready for I/O. For this, we specify the timeout argument as a null pointer.
+>- Wait up to a fixed amount of time— Return when one of the specified descriptors is ready for I/O, but do not wait beyond the number of seconds and microseconds specified in the timeval structure pointed to by the timeout argument.
+>- Do not wait at all— Return immediately after checking the descriptors. This is called polling. To specify this, the timeout argument must point to a timeval structure and the timer value (the number of seconds and microseconds specified by the structure) must be 0.
+
+>The wait in the first two scenarios is normally interrupted if the process catches a signal and returns from the signal handler.
+
+>The three middle arguments, readset, writeset, and exceptset, specify the descriptors that we want the kernel to test for reading, writing, and exception conditions. There are only two exception conditions currently supported:
+
+>- The arrival of out-of-band data for a socket. We will describe this in more detail in Chapter 24.
+>- The presence of control status information to be read from the master side of a pseudo-terminal that has been put into packet mode.
+
+#####`fd_set` macros
+```c++
+void FD_ZERO(fd_set *fdset);
+ /* clear all bits in fdset */
+ 
+void FD_SET(int fd, fd_set *fdset);
+ /* turn on the bit for fd in fdset */
+ 
+void FD_CLR(int fd, fd_set *fdset);
+ /* turn off the bit for fd in fdset */
+ 
+int FD_ISSET(int fd, fd_set *fdset);
+ /* is the bit for fd on in fdset ? */
+```
+
+>We allocate a descriptor set of the fd_set datatype, we set and test the bits in the set using these macros, and we can also assign it to another descriptor set across an equals sign (=) in C.
+>For example, to define a variable of type fd_set and then turn on the bits for descriptors 1, 4, and 5, we write
+
+```c++
+fd_set rset;
+
+FD_ZERO(&rset);          /* initialize the set: all bits off */
+FD_SET(1, &rset);        /* turn on bit for fd 1 */
+FD_SET(4, &rset);        /* turn on bit for fd 4 */
+FD_SET(5, &rset);        /* turn on bit for fd 5 */
+```
+
+>It is important to initialize the set, since unpredictable results can occur if the set is allocated as an automatic variable and not initialized.
+
+>Any of the middle three arguments to select, readset, writeset, or exceptset, can be specified as a null pointer if we are not interested in that condition. Indeed, if all three pointers are null, then we have a higher precision timer than the normal Unix sleep function
+
+> The maxfdp1 argument specifies the number of descriptors to be tested. Its value is the maximum descriptor to be tested plus one (hence our name of maxfdp1). The descriptors 0, 1, 2, up through and including maxfdp1–1 are tested. The reason it is maximum descriptor plus one and not maximum descriptor is that we are specifying the number of descriptors, not the largest value, and descriptors start at 0.
+
+>select modifies the descriptor sets pointed to by the readset, writeset, and exceptset pointers. These three arguments are value-result arguments. When we call the function, we specify the values of the descriptors that we are interested in, and on return, the result indicates which descriptors are ready. We use the FD_ISSET macro on return to test a specific descriptor in an fd_set structure. Any descriptor that is not ready on return will have its corresponding bit cleared in the descriptor set. To handle this, we turn on all the bits in which we are interested in all the descriptor sets each time we call select.
+
+#####Under What Conditions Is a Descriptor Ready?
+
+>* A socket is ready for reading if any of the following four conditions is true:
+ >- The number of bytes of data in the socket receive buffer is greater than or equal to the current size of the low-water mark for the socket receive buffer. A read operation on the socket will not block and will return a value greater than 0 (i.e., the data that is ready to be read). We can set this low-water mark using the SO_RCVLOWAT socket option. It defaults to 1 for TCP and UDP sockets.
+ >- The read half of the connection is closed (i.e., a TCP connection that has received a FIN). A read operation on the socket will not block and will return 0 (i.e., EOF).
+ >- The socket is a listening socket and the number of completed connections is nonzero. An accept on the listening socket will normally not block, although we will describe a timing condition in Section 16.6 under which the accept can block.
+ >- A socket error is pending. A read operation on the socket will not block and will return an error (–1) with errno set to the specific error condition. These pending errors can also be fetched and cleared by calling getsockopt and specifying the SO_ERROR socket option.
+>* A socket is ready for writing if any of the following four conditions is true:
+
+ >- The number of bytes of available space in the socket send buffer is greater than or equal to the current size of the low-water mark for the socket send buffer and either: (i) the socket is connected, or (ii) the socket does not require a connection (e.g., UDP). This means that if we set the socket to nonblocking (Chapter 16), a write operation will not block and will return a positive value (e.g., the number of bytes accepted by the transport layer). We can set this low-water mark using the SO_SNDLOWAT socket option. This low-water mark normally defaults to 2048 for TCP and UDP sockets.
+
+ >- The write half of the connection is closed. A write operation on the socket will generate SIGPIPE (Section 5.12).
+
+ >- A socket using a non-blocking connect has completed the connection, or the connect has failed.
+
+ >- A socket error is pending. A write operation on the socket will not block and will return an error (–1) with errno set to the specific error condition. These pending errors can also be fetched and cleared by calling getsockopt with the SO_ERROR socket option.
+
+>* A socket has an exception condition pending if there is out-of-band data for the socket or the socket is still at the out-of-band mark. (We will describe out-of-band data in Chapter 24.)
+
+ >- Our definitions of "readable" and "writable" are taken directly from the kernel's soreadable and sowriteable macros on pp. 530–531 of TCPv2. Similarly, our definition of the "exception condition" for a socket is from the soo_select function on these same pages.
+
+
+
+
