@@ -1,9 +1,5 @@
 # linux-network-programming
 
-[TOC]
-
----
-
 ####Function `socket`
 
 ```C++
@@ -278,6 +274,170 @@ struct pollfd {
 
 >* The POSIX specification requires both select and poll. But, from a portability perspective today, more systems support select than poll. Also, POSIX defines pselect, an enhanced version of select that handles signal blocking and provides increased time resolution. Nothing similar is defined for poll.
 
+---
+
+####Function pselect
+
+```c++
+#include <sys/select.h>
+ 
+#include <signal.h>
+ 
+#include <time.h>
+ 
+int pselect (int maxfdp1, fd_set *readset, fd_set *writeset, fd_set *exceptset, const struct timespec *timeout, const sigset_t *sigmask);
+//Returns: count of ready descriptors, 0 on timeout, –1 on error
+```
+
+>pselect contains two changes from the normal select function:
+
+>* pselect uses the timespec structure, another POSIX invention, instead of the timeval structure.
+
+```c++
+struct timespec {
+  time_t tv_sec;       /* seconds */
+  long   tv_nsec;      /* nanoseconds */
+};
+```
+
+>The difference in these two structures is with the second member: 
+>* The tv_nsec member of the newer structure specifies nanoseconds, whereas the tv_usec member of the older structure specifies microseconds.
+
+>* pselect adds a sixth argument: a pointer to a signal mask. This allows the program to disable the delivery of certain signals, test some global variables that are set by the handlers for these now-disabled signals, and then call pselect, telling it to reset the signal mask.
+
+>With regard to the second point, consider the following example. Our program's signal handler for `SIGINT` just sets the global `intr_flag` and returns. If our process is blocked in a call to `select`, the return from the signal handler causes the function to return with errno set to `EINTR`. But when `select` is called, the code looks like the following:
+
+
+```c++
+if (intr_flag)
+    handle_intr();       /* handle the signal */
+if ( (nready = select( ... )) < 0) {
+    if (errno == EINTR) {
+        if (intr_flag)
+            handle_intr();
+    }
+    ...
+}
+```
+
+The problem is that between the test of `intr_flag` and the call to `select`, if the signal occurs, it will be lost if `select` blocks forever. With `pselect`, we can now code this example reliably as
+
+```c++
+sigset_t newmask, oldmask, zeromask;
+
+sigemptyset(&zeromask);
+sigemptyset(&newmask);
+sigaddset(&newmask, SIGINT);
+
+sigprocmask(SIG_BLOCK, &newmask, &oldmask); /* block SIGINT */
+if (intr_flag)
+    handle_intr();     /* handle the signal */
+if ( (nready = pselect ( ... , &zeromask)) < 0) {
+    if (errno == EINTR)  {
+        if (intr_flag)
+            handle_intr ();
+    }
+    ...
+}
+```
+
+Before testing the `intr_flag` variable, we block `SIGINT`. When `pselect` is called, it replaces the signal mask of the process with an empty set (i.e., `zeromask`) and then checks the descriptors, possibly going to sleep. But when `pselect` returns, the signal mask of the process is reset to its value before `pselect` was called (i.e., `SIGINT` is blocked).
+
+---
+
+####Function of epoll family
+
+```c++
+#include	<sys/epoll.h>
+int epoll_create(int size);
+int epoll_create1(int flags);
+//On success, these system calls return a nonnegative file descriptor.
+//On error, -1 is returned, and errno is set to indicate the error.
+int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event); 
+//When successful, epoll_ctl() returns zero.  
+//When an error occurs, epoll_ctl() returns -1 and errno is set appropriately.
+int epoll_wait(int epfd, struct epoll_event * events, int maxevents, int timeout);
+```
+
+#####`epoll_create`
+>`epoll_create` creates an epoll instance.  Since Linux 2.6.8, the size argument is ignored, but must be greater than zero.
+
+>`epoll_create` returns a file descriptor referring to the new epoll instance.  This file descriptor is used for all the subsequent calls to the epoll interface.  When no longer required, the file descriptor returned by `epoll_create()` should be closed by using `close(2)`.  When all file descriptors referring to an epoll instance have been closed, the kernel destroys the instance and releases the associated resources for reuse.
+
+>In the initial `epoll_create()` implementation, the size argument informed the kernel of the number of file descriptors that the caller expected to add to the epoll instance.  The kernel used this information as a hint for the amount of space to initially allocate in internal data structures describing events.  (If necessary, the kernel would allocate more space if the caller's usage exceeded the hint given in size.)  Nowadays, this hint is no longer required (the kernel dynamically sizes the required data structures without needing the hint), but size must still be greater than zero, in order to ensure backward compatibility when new epoll applications are run on older kernels.
+
+#####`epoll_create1`
+>If `flags` is 0, then, other than the fact that the obsolete size argument is dropped, `epoll_create1()` is the same as `epoll_create()`.
+>The following value can be included in flags to obtain different behavior:
+
+>&emsp;`EPOLL_CLOEXEC`
+
+>&emsp;&emsp;Set the close-on-exec (`FD_CLOEXEC`) `flag` on the new file descriptor.  See the description of the `O_CLOEXEC` flag in `open(2)` for reasons why this may be useful.
+
+
+#####`epoll_ctl`
+>This system call performs control operations on the `epoll(7)` instance referred to by the file descriptor `epfd`.  It requests that the operation op be performed for the target file descriptor, `fd`.
+>Valid values for the op argument are:
+
+>* `EPOLL_CTL_ADD`
+> Register the target file descriptor `fd` on the epoll instance referred to by the file descriptor `epfd` and associate the event `event` with the internal file linked to `fd`.
+
+>* `EPOLL_CTL_MOD`
+> Change the event `event` associated with the target file descriptor `fd`.
+
+>* `EPOLL_CTL_DEL`
+> Remove (deregister) the target file descriptor `fd` from the epoll instance referred to by `epfd`. The event is ignored and can be NULL.
+
+```c++
+typedef union epoll_data {
+    void        *ptr;
+    int          fd;
+    uint32_t     u32;
+    uint64_t     u64;
+} epoll_data_t;
+
+struct epoll_event {
+    uint32_t     events;      /* Epoll events */
+    epoll_data_t data;        /* User data variable */
+};
+```
+
+>The `events` member is a bit mask composed using the following
+       available event types:
+
+>* EPOLLIN
+>&emsp;The associated file is available for `read(2)` operations.
+
+>* EPOLLOUT
+>&emsp;The associated file is available for `write(2)` operations.
+
+>* EPOLLRDHUP (since Linux 2.6.17)
+>&emsp;Stream socket peer closed connection, or shut down writing half of connection.  (This flag is especially useful for writing simple code to detect peer shutdown when using Edge Triggered monitoring.)
+
+>*EPOLLPRI
+>&emsp;There is urgent data available for `read(2)` operations.
+
+>*EPOLLERR
+>&emsp;Error condition happened on the associated file descriptor. `epoll_wait(2)` will always wait for this event; it is not necessary to set it in events.
+
+>*EPOLLHUP
+>&emsp;Hang up happened on the associated file descriptor. `epoll_wait(2)` will always wait for this event; it is not necessary to set it in events.  Note that when reading from a channel such as a pipe or a stream socket, this event merely indicates that the peer closed its end of the channel. Subsequent reads from the channel will return 0 (end of file) only after all outstanding data in the channel has been consumed.
+
+>*EPOLLET
+>&emsp;Sets the Edge Triggered behavior for the associated file descriptor.  The default behavior for epoll is Level Triggered.
+
+>*EPOLLONESHOT (since Linux 2.6.2)
+>&emsp;Sets the one-shot behavior for the associated file descriptor. This means that after an event is pulled out with `epoll_wait(2)` the associated file descriptor is internally disabled and no other events will be reported by the epoll interface.  The user must call `epoll_ctl()` with `EPOLL_CTL_MOD` to rearm the file descriptor with a new event mask.
+
+>*EPOLLWAKEUP (since Linux 3.5)
+>&emsp;If `EPOLLONESHOT` and `EPOLLET` are clear and the process has the `CAP_BLOCK_SUSPEND` capability, ensure that the system does not enter "suspend" or "hibernate" while this event is pending or being processed.  The event is considered as being "processed" from the time when it is returned by a call to `epoll_wait(2)` until the next call to `epoll_wait(2)` on the same epoll(7) file descriptor, the closure of that file descriptor, the removal of the event file descriptor with `EPOLL_CTL_DEL`, or the clearing of `EPOLLWAKEUP` for the event file descriptor with `EPOLL_CTL_MOD`.
+
+>*EPOLLEXCLUSIVE (since Linux 4.5)
+>&emsp;Sets an exclusive wakeup mode for the epoll file descriptor that is being attached to the target file descriptor, `fd`. When a wakeup event occurs and multiple epoll file descriptors are attached to the same target file using `EPOLLEXCLUSIVE`, one or more of the epoll file descriptors will receive an event with `epoll_wait(2)`.  The default in this scenario (when `EPOLLEXCLUSIVE` is not set) is for all epoll file descriptors to receive an event.  `EPOLLEXCLUSIVE` is thus useful for avoiding thundering herd problems in certain scenarios.
+
+>&emsp;If the same file descriptor is in multiple epoll instances,some with the `EPOLLEXCLUSIVE` flag, and others without, thenevents will be provided to all epoll instances that did not specify `EPOLLEXCLUSIVE`, and at least one of the epoll instances that did specify `EPOLLEXCLUSIVE`.
+
+>&emsp;The following values may be specified in conjunction with `EPOLLEXCLUSIVE`: `EPOLLIN`, `EPOLLOU`T, `EPOLLWAKEUP`, and `EPOLLET`. `EPOLLHUP` and `EPOLLERR` can also be specified, but this is not required: as usual, these events are always reported if they occur, regardless of whether they are specified in events. Attempts to specify other values in events yield an error. `EPOLLEXCLUSIVE` may be used only in an `EPOLL_CTL_ADD` operation; attempts to employ it with `EPOLL_CTL_MOD` yield an error.  If `EPOLLEXCLUSIVE` has been set using `epoll_ctl()`, then a subsequent `EPOLL_CTL_MOD` on the same `epfd`, `fd` pair yields an error.  A call to `epoll_ctl()` that specifies `EPOLLEXCLUSIVE` in events and specifies the target file descriptor `fd` as an epoll instance will likewise fail.  The error in all of these cases is `EINVAL`.
 
 
 
