@@ -1,74 +1,89 @@
-Chart Room Function Design In Detail
+###Chart Room Function Design In Detail
 
-聊天室功能：
-		注册/登录/退出
-		查看服务端上在线用户
-		建群/邀请加入群
-		私聊/查看聊天记录
-		群聊/查看聊天记录
-
-
-客户端：
-	1. 
-		注册
-		登录
-		退出
-	2. 
-		建群
-		好友列表
-			在线好友
-		聊天
-			私聊
-			群聊
-			聊天记录查看
-服务端：
-	1. 
-		通讯协议
-			注册/登录/建群/聊天/记录查询
-	2. 
-		数据存储
-			用户信息
-			在线、离线
-			聊天记录
-	3. 
+* 聊天室功能：
+	- 注册/登录/退出
+	- 查看服务端上在线用户
+	- 建群/邀请加入群
+	- 私聊/查看聊天记录
+	- 群聊/查看聊天记录
 
 
-DbManager.cpp		//处理数据库相关操作
-	提供对外接口：
+* 客户端：
+	- 登录页面	
+		- 注册
+		- 登录
+		- 退出
+	- 好友面板
+		- 建群
+		- 在线好友
+	- 聊天面板
+		* 私聊
+		* 群聊/群成员
+		* 聊天记录查看
+* 服务端：
+	- 通讯协议
+		- 注册
+		- 登录
+		- 建群
+		- 聊天
+		- 记录查询
+	- 数据存储
+		- 用户信息
+		- 在线/离线
+		- 聊天记录
+
+* DbManager.cpp
+```c++
+	//处理数据库相关操作
 	int StartUpDbManager();
 	int GetSqlStatement(const int iSqlType, char *pSql, const int iMaxSqlLen);	//获取SQL
 	int ExecQuerySql(const char *pSql);
 	int ExecDMLSql(const char *pSql);
+```
 
-NetWorkManager.cpp		//处理网络相关操作
-	提供对外接口：
+* NetWorkManager.cpp
+```c++
+    //处理网络相关操作
 	public:
 		int StartUpServer();
 		int ShutDownServer();
 	private:
 		int SendPacket(char *packetBuff, const ssize_t buffLen);
 		int RecvPacket(char *packetBuff, ssize_t inOutLen);
+```
 
-JsonParser.cpp		//处理数据包转换操作
-	提供对外接口：
+* JsonParser.cpp
+```c++
+    //处理数据包转换操作
 	int InitJsonParser();
 	int ParseRecvPacket(char *packetBuff, const ssize_t buffLen, CPackBase *pBase);
 	int ParseSendPacket(CPackBase *pBase, char *packetBuff, ssize_t &inOutLen);
+```
 
-UserStatusManager.cpp	//用户状态管理,注册、登录、退出
+* UserStatusManager.cpp
+```c++
+    //用户状态管理,注册、登录、退出
 	int InitUserStatusManager();
 	bool Login(const CUser user);		//用户登录
 	bool Logout(const int userId, const int iLogoutStatus=0);	//用户登出，0手动退出，1其他原因退出
 	bool Register(const CUser user);	//用户注册
+```
 
-HeartBeat.cpp
+* HeartBeat.cpp
+```c++
 	bool KeepAlive(const int userId);	//用户10S一次心跳，无心跳时自动下线
-GroupManager.cpp
+```
+* GroupManager.cpp
+```c++
 	bool CreateGroup(const CGroup &group);	//创建群
 	int JoinGroup(const int userId, const CGroup &group);
-MessageLogManager.cpp
+```
+* MessageLogManager.cpp
+```c++
 	int NewMessage();
+```
 
+```sql
 //用户表
 CREATE TABLE USER
 {
@@ -117,8 +132,9 @@ CREATE TABLE CHART_LOG
 	MESSAGE_DATE DATE;
 	MESSAGE CHAR[512];
 };
+```
 
-
+```json
 {
     "MESSAGE_TYPE": "REGISTER",
     "VERSION": 1.01,
@@ -173,18 +189,21 @@ CREATE TABLE CHART_LOG
     "RECORD_QUERY_RESPONSE": {
         "OBJECT_ID": "",
         "OBJECT_TYPE": 0,
-        "DATE_BEGIN": "",
-        "DATE_END": "",
+        "DATE_BEGIN": "20170301",
+        "DATE_END": "20170331",
             "MESSAGE_LOG_LIST_SIZE": 2,
             "MESSAGE_LOG_LIST": [
                 {
-                	USER_ID:123456,
-                	MESSAGE:"HI."
+                	"USER_ID":123456,
+                	"MESSAGE":"HI.",
+			"DATETIME":"20170315123030"
                 },
                 {
-                	USER_ID:23456,
-                	MESSAGE:"HELLO."
+                	"USER_ID":23456,
+                	"MESSAGE":"HELLO.",
+			"DATETIME":"20170315123040"
                 }
             ]
     }
 }
+```
