@@ -1,6 +1,6 @@
 # linux-network-programming
 
-####Function `socket`
+#### Function `socket`
 
 ```C++
 #include <sys/socket.h>
@@ -44,7 +44,7 @@ int socket(int family, int type, int protocol);
 
 ---
 
-####Function `connect`
+#### Function `connect`
 
 ```C++
 #include <sys/socket.h>
@@ -54,7 +54,7 @@ int connect(int sockfd, const struct sockaddr *servaddr, socklen_t addrlen);
 ```
 ---
 
-####Function `bind`
+#### Function `bind`
 
 ```C++
 #include <sys/socket.h>
@@ -67,7 +67,7 @@ int bind(int sockfd, const struct sockaddr *myaddr, socklen_t addrlen);
 
 ---
 
-####Function `listen`
+#### Function `listen`
 
 ```c++
 #include <sys/socket.h>
@@ -83,7 +83,7 @@ int bind(int sockfd, const struct sockaddr *myaddr, socklen_t addrlen);
 
 ---
 
-####Function `accept`
+#### Function `accept`
 
 ```c++
 #include <sys/socket.h>
@@ -95,7 +95,7 @@ int accept (int sockfd, struct sockaddr *cliaddr, socklen_t *addrlen);
 
 ---
 
-####Function `close`
+#### Function `close`
 
 ```c++
 #include <unistd.h>
@@ -112,7 +112,7 @@ int close (int sockfd);
 
 ---
 
-####Function `getsockname`/`getpeername`
+#### Function `getsockname`/`getpeername`
 ```c++
 #include <sys/socket.h>
  
@@ -125,7 +125,7 @@ int getpeername(int sockfd, struct sockaddr *peeraddr, socklen_t *addrlen);
 
 ---
 
-####Function `select`
+#### Function `select`
 
 ```c++
 #include <sys/select.h>
@@ -138,7 +138,7 @@ int select(int maxfdp1, fd_set *readset, fd_set *writeset, fd_set *exceptset, co
 
 >We start our description of this function with its final argument, which tells the kernel how long to wait for one of the specified descriptors to become ready. A timeval structure specifies the number of seconds and microseconds.
 
-#####Struct `timeval`
+##### Struct `timeval`
 ```c++
 struct timeval  {
   long   tv_sec;          /* seconds */
@@ -159,7 +159,7 @@ struct timeval  {
 >- The arrival of out-of-band data for a socket. We will describe this in more detail in Chapter 24.
 >- The presence of control status information to be read from the master side of a pseudo-terminal that has been put into packet mode.
 
-#####`fd_set` macros
+##### `fd_set` macros
 ```c++
 void FD_ZERO(fd_set *fdset);
  /* clear all bits in fdset */
@@ -194,7 +194,7 @@ FD_SET(5, &rset);        /* turn on bit for fd 5 */
 
 >select modifies the descriptor sets pointed to by the readset, writeset, and exceptset pointers. These three arguments are value-result arguments. When we call the function, we specify the values of the descriptors that we are interested in, and on return, the result indicates which descriptors are ready. We use the FD_ISSET macro on return to test a specific descriptor in an fd_set structure. Any descriptor that is not ready on return will have its corresponding bit cleared in the descriptor set. To handle this, we turn on all the bits in which we are interested in all the descriptor sets each time we call select.
 
-#####Under What Conditions Is a Descriptor Ready?
+##### Under What Conditions Is a Descriptor Ready?
 
 >* A socket is ready for reading if any of the following four conditions is true:
  >- The number of bytes of data in the socket receive buffer is greater than or equal to the current size of the low-water mark for the socket receive buffer. A read operation on the socket will not block and will return a value greater than 0 (i.e., the data that is ready to be read). We can set this low-water mark using the SO_RCVLOWAT socket option. It defaults to 1 for TCP and UDP sockets.
@@ -217,14 +217,14 @@ FD_SET(5, &rset);        /* turn on bit for fd 5 */
 
 ---
 
-####Function `poll`
+#### Function `poll`
 ```c++
 #include <poll.h>
  
 int poll (struct pollfd *fdarray, unsigned long nfds, int timeout);
 //Returns: count of ready descriptors, 0 on timeout, –1 on error
 ```
-#####Struct `pollfd`
+##### Struct `pollfd`
 >The first argument is a pointer to the first element of an array of structures. Each element of the array is a pollfd structure that specifies the conditions to be tested for a given descriptor, fd.
 
 ```c++
@@ -239,7 +239,7 @@ struct pollfd {
 
 >If we are no longer interested in a particular descriptor, we just set the fd member of the pollfd structure to a negative value. Then the events member is ignored and the revents member is set to 0 on return.
 
-######Input `events` and returned `revents` for `poll`.
+###### Input `events` and returned `revents` for `poll`.
 |Constant|Input to evnets?|Result from revents?|Description|
 |--------|:--------------:|:------------------:|:---------:|
 |POLLIN<br>POLLRDNORM<br>POLLRDBAND<br>POLLPRI|\*<br>\*<br>\*<br>\*|\*<br>\*<br>\*<br>\*|Nromal or priority band data can be read<br>Normal data can be read<br>Priority data can be read<br>High-priority data can be read|
@@ -259,7 +259,7 @@ struct pollfd {
 
 >The number of elements in the array of structures is specified by the `nfds` argument.
 
-#####Timeout values for `poll`
+##### Timeout values for `poll`
 
 |Timeout value|Description|
 |-------------|:---------:|
@@ -276,7 +276,7 @@ struct pollfd {
 
 ---
 
-####Function pselect
+#### Function pselect
 
 ```c++
 #include <sys/select.h>
@@ -345,7 +345,7 @@ Before testing the `intr_flag` variable, we block `SIGINT`. When `pselect` is ca
 
 ---
 
-####Function of epoll family
+#### Function of epoll family
 
 ```c++
 #include	<sys/epoll.h>
@@ -359,14 +359,14 @@ int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event);
 int epoll_wait(int epfd, struct epoll_event * events, int maxevents, int timeout);
 ```
 
-#####`epoll_create`
+##### `epoll_create`
 >`epoll_create` creates an epoll instance.  Since Linux 2.6.8, the size argument is ignored, but must be greater than zero.
 
 >`epoll_create` returns a file descriptor referring to the new epoll instance.  This file descriptor is used for all the subsequent calls to the epoll interface.  When no longer required, the file descriptor returned by `epoll_create()` should be closed by using `close(2)`.  When all file descriptors referring to an epoll instance have been closed, the kernel destroys the instance and releases the associated resources for reuse.
 
 >In the initial `epoll_create()` implementation, the size argument informed the kernel of the number of file descriptors that the caller expected to add to the epoll instance.  The kernel used this information as a hint for the amount of space to initially allocate in internal data structures describing events.  (If necessary, the kernel would allocate more space if the caller's usage exceeded the hint given in size.)  Nowadays, this hint is no longer required (the kernel dynamically sizes the required data structures without needing the hint), but size must still be greater than zero, in order to ensure backward compatibility when new epoll applications are run on older kernels.
 
-#####`epoll_create1`
+##### `epoll_create1`
 >If `flags` is 0, then, other than the fact that the obsolete size argument is dropped, `epoll_create1()` is the same as `epoll_create()`.
 >The following value can be included in flags to obtain different behavior:
 
@@ -375,7 +375,7 @@ int epoll_wait(int epfd, struct epoll_event * events, int maxevents, int timeout
 >&emsp;&emsp;Set the close-on-exec (`FD_CLOEXEC`) `flag` on the new file descriptor.  See the description of the `O_CLOEXEC` flag in `open(2)` for reasons why this may be useful.
 
 
-#####`epoll_ctl`
+##### `epoll_ctl`
 >This system call performs control operations on the `epoll(7)` instance referred to by the file descriptor `epfd`.  It requests that the operation op be performed for the target file descriptor, `fd`.
 >Valid values for the op argument are:
 
